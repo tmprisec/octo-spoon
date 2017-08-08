@@ -15,7 +15,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SERVER_PORT 5410
+#define SERVER_PORT 1054
 #define MAX_PENDING 5
 //#define MAX_LINE 256
 
