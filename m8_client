@@ -1,0 +1,170 @@
+// --------------------------------------------------------------------------
+// Description: This program will be used to build a network client/server
+// system that implements a "Magic 8 Ball" protocol.
+//--------------------------------------------------------------------------
+
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+
+#define SERVER_PORT 5410
+//#define MAX_LINE 256
+
+void build(char buf[], char code, char msg[]);
+int parse(char buf[], char msg[]);
+
+int main(int argc, char * argv[]) {
+
+  struct hostent *hp;
+  struct sockaddr_in sin;
+  char *host;
+  char buf[36];
+  int s;
+  int len; 
+  int code;
+  char msg[32];
+
+
+  if (argc==2) 
+  {
+    host = argv[1];
+  }
+  else
+  {
+    fprintf(stderr, "usage: simplex-talk host\n");
+    exit(1);
+  }
+  
+  /* translate host name into peer's IP address */
+  hp = gethostbyname(host);
+  if(!hp)
+  {
+    fprintf(stderr, "simplex-talk: unknown host: %s\n", host);
+    exit(1);
+  }
+  
+  /* build address data structure */
+  bzero((char *)&sin, sizeof(sin));
+  sin.sin_family = AF_INET;
+  bcopy(hp->h_addr, (char *)&sin.sin_addr, hp->h_length);  
+  sin.sin_port = htons(SERVER_PORT);
+
+  /* active open */
+  if((s = socket(PF_INET, SOCK_STREAM, 0)) < 0)
+  {
+    printf("Socket Call Failed");
+    exit(1);
+  }
+
+  /* connect to the host */
+  if(connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+  {
+    printf("Connect Call Failed");
+    close(s);
+    exit(1);
+  }
+    
+    bzero(buf, sizeof(buf));
+
+    build(buf,'1',"Hello Magic 8 Ball\0");
+    send(s, buf, sizeof(buf), 0);		    // code 10 
+
+    recv(s, buf, sizeof(buf), 0);           // code 20
+    code = parse(buf, msg);
+
+    if(code == 20)
+    {
+        build(buf, '3', "Will I earn an A on this assignment?\0");
+        send(s, buf, sizeof(buf), 0);		// code 30 question
+    }
+    else
+    {
+        build(buf, '5', "Protocol Violation\0");
+        send(s, buf, sizeof(buf), 0);	    // code 50 error
+        close(s);
+    }
+
+    recv(s, buf, sizeof(buf), 0);           // code 40
+    code = parse(buf, msg);
+
+    if(code == 40)
+    { 
+        printf("%s\n", buf);
+    }
+    else
+    {
+        build(buf, '5', "Protocol Violation\0");
+        send(s, buf, sizeof(buf), 0);	    // code 50 error
+        close(s);
+    }
+
+
+  return 0;
+}
+
+//---------------------------------------------------------------------------
+// function to build buffer
+//---------------------------------------------------------------------------
+void build(char buf[], char code, char msg[])   
+{
+    int len;
+
+    buf[0] = code;
+    buf[1] = '0';
+
+    len = strnlen(msg, sizeof(buf) - 4);
+
+    buf[2] = '0' + len / 10;
+    buf[3] = '0' + len % 10; 
+
+    strlcpy(buf + 4, msg, sizeof(buf) - 4);
+}
+
+//---------------------------------------------------------------------------
+// function to take apart buffer
+//---------------------------------------------------------------------------
+int parse(char buf[], char msg[])
+{
+    char lenStr[3];
+    int code;
+    long long num;
+    int len; 
+    
+    lenStr[0] = buf[2];
+    lenStr[1] = buf[3];
+    lenStr[2] = '\0';
+
+    len = strnlen(buf + 4, sizeof(buf) - 4);
+
+    num = strtonum(lenStr, 0, sizeof(buf) - 4, 0); 
+    
+    if(buf[0] == '1' && buf[1] == '0')
+    {
+        code = 10;   
+    }
+    else if(buf[0] == '2' && buf[1] == '0')
+    {
+        code = 20;   
+    }
+    else if(buf[0] == '3' && buf[1] == '0')
+    {
+        code = 30;   
+    }
+    else if(buf[0] == '4' && buf[1] == '0')
+    {
+        code = 40;   
+    }
+
+    if(num != len)
+    {
+        code = 50;
+    }
+    
+    return code;
+}
