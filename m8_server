@@ -1,0 +1,206 @@
+// --------------------------------------------------------------------------
+// Description: This program will be used to build a network client/server
+// system that implements the "Magic 8 Ball" protocol as specified in
+// assignment.
+//--------------------------------------------------------------------------
+
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <time.h>
+
+#define SERVER_PORT 5410
+#define MAX_PENDING 5
+//#define MAX_LINE 256
+
+void build(char buf[], char code, char msg[]);
+int parse(char buf[], char msg[]);
+
+int main() {
+
+  struct sockaddr_in sin;
+  char buf[36];
+  int len;
+  socklen_t new_len;
+  int s, new_s;
+  int num; 
+  int code;
+  char msg[32];
+  
+  /* build address data structure */
+  bzero((char *) &sin, sizeof(sin));
+  sin.sin_family = AF_INET;
+  sin.sin_addr.s_addr = INADDR_ANY;         // specify the interface to listen on
+  sin.sin_port = htons(SERVER_PORT);
+  
+  /* setup passive open */
+  if((s = socket(PF_INET, SOCK_STREAM, 0)) < 0)
+  {
+    printf("Socket Call Failed");
+    exit(1);
+  }
+
+  if((bind(s, (struct sockaddr *) &sin, sizeof(sin))) < 0)
+  {
+    printf("Bind Call Failed");
+    exit(1);
+  }
+
+  listen(s, MAX_PENDING);   // listen mode
+  
+  /* wait for connection, then receive and print data */
+  while(1)
+  { 
+    if((new_s = accept(s, (struct sockaddr *) &sin, &new_len)) < 0)
+    {
+      printf("Accept Call Failed");
+      exit(1);
+    }
+    
+    bzero(buf, sizeof(buf));
+
+    recv(new_s, buf, sizeof(buf), 0);		// code 10 
+    code = parse(buf, msg);
+
+    if(code == 10)
+    {
+      build(buf, '2', "Ask your question\0");
+      send(new_s, buf, sizeof(buf), 0);	    // code 20 
+    }
+    else
+    {
+      build(buf, '5', "Protocol Violation\0");
+      send(new_s, buf, sizeof(buf), 0);     // code 50 Error
+      close(new_s);
+    }
+
+    recv(new_s, buf, sizeof(buf), 0);       // code 30 
+    code = parse(buf, msg);
+
+    if(code == 30)
+    {
+      num = arc4random() % 20 + 1;
+
+      switch(num)
+      {
+        case 1: build(buf, '4', "It is certain\0");
+            break;
+       	case 2: build(buf, '4', "It is decidedly so\0");
+        	break;
+       	case 3: build(buf, '4', "Without a doubt\0");
+      		break;
+      	case 4: build(buf, '4', "Yes, definitely\0");
+      		break;
+      	case 5: build(buf, '4', "You may rely on it\0");
+      		break;
+      	case 6: build(buf, '4', "As I see it, yes\0");
+      		break;
+      	case 7: build(buf, '4', "Most likely\0");
+      		break;
+      	case 8: build(buf, '4', "Outlook good\0");
+      		break;
+      	case 9: build(buf, '4', "Yes'\0'");
+      	case 10: build(buf, '4', "Signs point to yes\0");
+      		break; 
+      	case 11: build(buf, '4', "Reply hazy try again\0");
+      		break;
+      	case 12: build(buf, '4', "Ask again later\0");
+      		break;
+      	case 13: build(buf, '4', "Better not tell you now\0");
+      		break;
+      	case 14: build(buf, '4', "Cannot predict now\0");
+      		break;
+      	case 15: build(buf, '4', "Concentrate and ask again\0");
+      		break;
+      	case 16: build(buf, '4', "Don't count on it\0");
+      		break;
+      	case 17: build(buf, '4', "My reply is no\0");
+      		break;
+      	case 18: build(buf, '4', "My sources say no\0");
+      		break;
+      	case 19: build(buf, '4', "Outlook not so good\0");
+      		break;
+      	case 20: build(buf, '4', "Very doubtful\0");
+      		break;
+	  }
+		send(new_s, buf, sizeof(buf), 0);   // code 40 reply to question
+		close(new_s);
+    }
+    else
+    {
+      build(buf, '5', "Protocol Violation\0");
+      send(new_s, buf, sizeof(buf), 0);	    // code 50 Error
+      close(new_s);
+    }
+  }  
+
+  return 0;
+}
+
+//---------------------------------------------------------------------------
+// function to build buffer
+//---------------------------------------------------------------------------
+void build(char buf[], char code, char msg[])   
+{
+    int len;
+
+    buf[0] = code;
+    buf[1] = '0';
+
+    
+    len = strnlen(msg, sizeof(buf) - 4);
+
+    buf[2] = '0' + len / 10;
+    buf[3] = '0' + len % 10; 
+
+    strlcpy(buf + 4, msg, sizeof(buf) - 4);
+}
+
+//---------------------------------------------------------------------------
+// function to take apart buffer
+//---------------------------------------------------------------------------
+int parse(char buf[], char msg[])
+{
+    char lenStr[3];
+    int code;
+    long long num;
+    int len; 
+    
+    lenStr[0] = buf[2];
+    lenStr[1] = buf[3];
+    lenStr[2] = '\0';
+
+    len = strnlen(buf + 4, sizeof(buf) - 4);
+
+    num = strtonum(lenStr, 0, sizeof(buf) - 4, 0); 
+    
+    if(buf[0] == '1' && buf[1] == '0')
+    {
+        code = 10;   
+    }
+    else if(buf[0] == '2' && buf[1] == '0')
+    {
+        code = 20;   
+    }
+    else if(buf[0] == '3' && buf[1] == '0')
+    {
+        code = 30;   
+    }
+    else if(buf[0] == '4' && buf[1] == '0')
+    {
+        code = 40;   
+    }
+
+    if(num != len)
+    {
+        code = 50;
+    }
+    
+    return code;
+}
