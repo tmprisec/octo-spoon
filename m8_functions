@@ -1,0 +1,74 @@
+// ---------------------------------------------------------------------------
+// m8_functions.h 
+// ---------------------------------------------------------------------------
+
+#ifndef M8_FUNCTIONS_H 
+#define M8_FUNCTIONS_H
+
+#include <iostream> 
+using namespace std;
+
+void build(char buf[], char code, char msg[]);
+int parse(char buf[], char msg[]);
+
+//---------------------------------------------------------------------------
+// function to build buffer
+//---------------------------------------------------------------------------
+void build(char buf[], char code, char msg[])   
+{
+    int len;
+
+    buf[0] = code;
+    buf[1] = '0';
+
+    
+    len = strnlen(msg, sizeof(buf) - 4, 0);
+
+    buf[2] = '0' + len / 10;
+    buf[3] = '0' + len % 10; 
+
+    strlcpy(buf + 4, msg, sizeof(buf) - 4);
+}
+
+//---------------------------------------------------------------------------
+// function to take apart buffer
+//---------------------------------------------------------------------------
+int parse(char buf[], char msg[])
+{
+    char lenStr[3];
+    int code;
+    long long num;
+    int len; 
+    
+    lenStr[0] = buf[2];
+    lenStr[1] = buf[3];
+    lenStr[2] = '\0';
+
+    len = strnlen(buf + 4, sizeof(buf) - 4, 0);
+
+    num = strtonum(lenStr, 0, sizeof(buf) - 4, 0); 
+    
+    if(buf[0] == '1' && buf[1] == '0')
+    {
+        code = 10;   
+    }
+    else if(buf[0] == '2' && buf[1] == '0')
+    {
+        code = 20;   
+    }
+    else if(buf[0] == '3' && buf[1] == '0')
+    {
+        code = 30;   
+    }
+    else if(buf[0] == '4' && buf[1] == '0')
+    {
+        code = 40;   
+    }
+
+    if(num != len)
+    {
+        code = 50;
+    }
+    
+    return code;
+}
